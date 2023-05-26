@@ -1,0 +1,25 @@
+logging:
+  level:
+    org:
+      springframework:
+        security:
+          saml: DEBUG
+      opensaml: DEBUG
+    com:
+      spring:
+        boot:
+          security:
+            saml: DEBUG
+
+service.provider.entity.id: com:camunda2:spring:sp
+
+idp.metedata.url: https://login.microsoftonline.com/0acffdf6-dbd6-4517-963c-9165acaf6798/federationmetadata/2007-06/federationmetadata.xml?appid=7a520391-66a3-411e-8026-e40ade5f41cb
+
+# you can update credentials if you want, I recommend you to keep as it is for demo purpose
+saml:
+  keystore.password: nalle123
+  private.key:
+    alias: apollo
+    password: nalle123
+    
+spring.main.allow-circular-references: true
