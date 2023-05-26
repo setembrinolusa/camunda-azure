@@ -1,15 +1,3 @@
-logging:
-  level:
-    org:
-      springframework:
-        security:
-          saml: DEBUG
-      opensaml: DEBUG
-    com:
-      spring:
-        boot:
-          security:
-            saml: DEBUG
 
 service.provider.entity.id: com:camunda2:spring:sp
 
@@ -22,4 +10,97 @@ saml:
     alias: apollo
     password: nalle123
     
-spring.main.allow-circular-references: true
+spring:
+  main.allow-circular-references: true
+  profiles:
+    active: "local"
+  main:
+    allow-bean-definition-overriding: true
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: America/Sao_Paulo
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://192.168.0.49:5433/macro_azure}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:sa}
+    configuration.maximum-pool-size: 30
+  jpa:
+    database: POSTGRESQL
+    show-sql: true
+    hibernate.ddl-auto: create-drop
+  database.driverClassName: org.postgresql.Driver
+
+#############################################################################
+## Spring Doc OpenApi
+#############################################################################
+springdoc.default-produces-media-type: application/json
+
+#############################################################################
+## Feign Config
+#############################################################################
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 60000
+        readTimeout: 10000
+        loggerLevel: full
+  httpclient:
+    disableSslValidation: true
+    enabled: false
+  okhttp:
+    enabled: true
+  circuitbreaker:
+    enabled: true
+  retry:
+    maxAttempts: 2
+    delay:
+      initial: 1000
+      max: 1
+  threadpool:
+    default:
+      coreSize: 5
+      maximumSize: 15
+      maxQueueSize: 190
+
+#############################################################################
+## i18n configuration
+#############################################################################
+messages:
+  always-use-message-format: false
+  basename: messages,config
+
+#############################################################################
+## Management configuration
+#############################################################################
+logging:
+  level:
+    org:
+      springframework:
+        security: WARN
+        saml: DEBUG
+      opensaml: DEBUG
+    com:
+      zaxxer:
+        hikari:
+          HikariConfig: 'DEBUG '
+          nodeValue: TRACE
+      spring:
+        boot:
+          security:
+            saml: DEBUG
+aws:
+  accessKey: ${AWS_ACCESS_KEY:null}
+  secretKey: ${AWS_SECRET_KEY:null}
+  role: ${AWS_ROLE_ARN:arn:aws:iam::294532563337:role/AWSEKSClusterCamunda}
+  sessionName: ${AWS_ROLE_SESSION_NAME:macro-bpm}
+  token: ${AWS_WEB_IDENTITY_TOKEN_FILE:token}
+  dbSecret: ${DB_SECRET_NAME:userDB}
+  esbSecret: ${ESB_SECRET_NAME:userCamunda}
+  bucket:
+    name: ${BUCKET_NAME:bm-aws-us1-d1-cam-bkt-01}
+  vpc:
+    endpoint: ${AWS_ENDPOINT_VPC:https://bucket.vpce-0b41d1e1e0bc9d201-hi3p5pb7.s3.us-east-1.vpce.amazonaws.com}
+
+soap:
+  url: http://localhost:8080/ws

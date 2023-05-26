@@ -1,6 +1,14 @@
 package com.spring.boot.security.saml.config;
 
-import com.spring.boot.security.saml.core.SAMLUserDetailsServiceImpl;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+
+import javax.servlet.Filter;
+
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.velocity.app.VelocityEngine;
@@ -14,6 +22,7 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -24,16 +33,44 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.saml.*;
+import org.springframework.security.saml.SAMLAuthenticationProvider;
+import org.springframework.security.saml.SAMLBootstrap;
+import org.springframework.security.saml.SAMLDiscovery;
+import org.springframework.security.saml.SAMLEntryPoint;
+import org.springframework.security.saml.SAMLLogoutFilter;
+import org.springframework.security.saml.SAMLLogoutProcessingFilter;
+import org.springframework.security.saml.SAMLProcessingFilter;
+import org.springframework.security.saml.SAMLWebSSOHoKProcessingFilter;
 import org.springframework.security.saml.context.SAMLContextProviderImpl;
 import org.springframework.security.saml.key.JKSKeyManager;
 import org.springframework.security.saml.key.KeyManager;
 import org.springframework.security.saml.log.SAMLDefaultLogger;
-import org.springframework.security.saml.metadata.*;
+import org.springframework.security.saml.metadata.CachingMetadataManager;
+import org.springframework.security.saml.metadata.ExtendedMetadata;
+import org.springframework.security.saml.metadata.ExtendedMetadataDelegate;
+import org.springframework.security.saml.metadata.MetadataDisplayFilter;
+import org.springframework.security.saml.metadata.MetadataGenerator;
+import org.springframework.security.saml.metadata.MetadataGeneratorFilter;
 import org.springframework.security.saml.parser.ParserPoolHolder;
-import org.springframework.security.saml.processor.*;
+import org.springframework.security.saml.processor.HTTPArtifactBinding;
+import org.springframework.security.saml.processor.HTTPPAOS11Binding;
+import org.springframework.security.saml.processor.HTTPPostBinding;
+import org.springframework.security.saml.processor.HTTPRedirectDeflateBinding;
+import org.springframework.security.saml.processor.HTTPSOAP11Binding;
+import org.springframework.security.saml.processor.SAMLBinding;
+import org.springframework.security.saml.processor.SAMLProcessorImpl;
 import org.springframework.security.saml.util.VelocityFactory;
-import org.springframework.security.saml.websso.*;
+import org.springframework.security.saml.websso.ArtifactResolutionProfile;
+import org.springframework.security.saml.websso.ArtifactResolutionProfileImpl;
+import org.springframework.security.saml.websso.SingleLogoutProfile;
+import org.springframework.security.saml.websso.SingleLogoutProfileImpl;
+import org.springframework.security.saml.websso.WebSSOProfile;
+import org.springframework.security.saml.websso.WebSSOProfileConsumer;
+import org.springframework.security.saml.websso.WebSSOProfileConsumerHoKImpl;
+import org.springframework.security.saml.websso.WebSSOProfileConsumerImpl;
+import org.springframework.security.saml.websso.WebSSOProfileECPImpl;
+import org.springframework.security.saml.websso.WebSSOProfileImpl;
+import org.springframework.security.saml.websso.WebSSOProfileOptions;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -47,7 +84,8 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
-import java.util.*;
+import com.spring.boot.camunda.filters.ProcessEngineAuthenticationFilter;
+import com.spring.boot.security.saml.core.SAMLUserDetailsServiceImpl;
 
 @Configuration
 @EnableWebSecurity
@@ -271,6 +309,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter implements I
         SavedRequestAwareAuthenticationSuccessHandler successRedirectHandler =
                 new SavedRequestAwareAuthenticationSuccessHandler();
         successRedirectHandler.setDefaultTargetUrl("/landing");
+//      ------ CAMUNDA -------------------------------------------
+//      ----------------------------------------------------------
+//        successRedirectHandler.setDefaultTargetUrl("/camunda/app/welcome/default/#!/welcome");
         return successRedirectHandler;
     }
 
@@ -281,6 +322,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter implements I
                 new SimpleUrlAuthenticationFailureHandler();
         failureHandler.setUseForward(true);
         failureHandler.setDefaultFailureUrl("/error");
+//      ------ CAMUNDA -------------------------------------------
+//      ----------------------------------------------------------
+//        successRedirectHandler.setDefaultTargetUrl("/camunda/app/welcome/default/#!/login");
         return failureHandler;
     }
 
@@ -313,6 +357,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter implements I
     public SimpleUrlLogoutSuccessHandler successLogoutHandler() {
         SimpleUrlLogoutSuccessHandler successLogoutHandler = new SimpleUrlLogoutSuccessHandler();
         successLogoutHandler.setDefaultTargetUrl("/");
+//      ------ CAMUNDA -------------------------------------------
+//      ----------------------------------------------------------
+//        successRedirectHandler.setDefaultTargetUrl("/camunda/app/welcome/default/#!/login");
         return successLogoutHandler;
     }
 
@@ -403,18 +450,27 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter implements I
     @Bean
     public FilterChainProxy samlFilter() throws Exception {
         List<SecurityFilterChain> chains = new ArrayList<>();
-        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/login/**"),
+//      ------ CAMUNDA -------------------------------------------
+//      ----------------------------------------------------------
+        //TODO VALIDAR se aqui pode ser adicionado o FilterRegistrationBean processEngineAuthenticationFilter()
+        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/login/**"), ///camunda/app/welcome/default/#!/login
                 samlEntryPoint()));
-        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/logout/**"),
+       
+        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/logout/**"),///camunda/app/welcome/default/#!/welcome
                 samlLogoutFilter()));
-        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/metadata/**"),
+        
+        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/metadata/**"),///camunda/**
                 metadataDisplayFilter()));
-        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/SSO/**"),
+        
+        chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/SSO/**"),///camunda/app/welcome/default/#!/welcome
                 samlWebSSOProcessingFilter()));
+        
         chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/SSOHoK/**"),
                 samlWebSSOHoKProcessingFilter()));
+        
         chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/SingleLogout/**"),
                 samlLogoutProcessingFilter()));
+        
         chains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/saml/discovery/**"),
                 samlIDPDiscovery()));
         return new FilterChainProxy(chains);
@@ -459,7 +515,43 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter implements I
         http
                 .logout()
                 .disable();    // The logout procedure is already handled by SAML filters.
+        
+        
+//      ------ CAMUNDA -------------------------------------------
+//      ----------------------------------------------------------
+
+//        http.csrf().ignoringAntMatchers("/camunda/api/**")
+//        .and()
+//        .antMatcher("/**")
+//        .authorizeRequests()
+//        .antMatchers("/camunda/app/**")
+//        .authenticated()
+//        .anyRequest()
+//        .permitAll()
+//        .and()
+//        .saml2Login().defaultSuccessUrl("/camunda/app/welcome/default/#!/welcome");
     }
+    
+//    ------ CAMUNDA -------------------------------------------
+//    ----------------------------------------------------------
+    @Bean
+	public FilterRegistrationBean processEngineAuthenticationFilter() {
+		FilterRegistrationBean registration = new FilterRegistrationBean();
+		registration.setName("camunda-kong-auth");
+		registration.addUrlPatterns("/engine-rest/*");
+		registration.addInitParameter("authentication-provider",
+				"com.fundingsocieties.camunda.config.ProcessEngineAuthenticationFilter");
+		registration.setOrder(101);
+		registration.setFilter(getProcessEngineAuthenticationFilter());
+		return registration;
+	}
+    
+//  ------ CAMUNDA -------------------------------------------
+//  ----------------------------------------------------------
+    @Bean
+	public Filter getProcessEngineAuthenticationFilter() {
+		return new ProcessEngineAuthenticationFilter();
+	}
 
     /**
      * Sets a custom authentication provider.
